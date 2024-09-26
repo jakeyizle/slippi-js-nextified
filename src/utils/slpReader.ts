@@ -1,5 +1,4 @@
 import { decode } from "@shelacek/ubjson";
-import fs from "fs";
 import iconv from "iconv-lite";
 import mapValues from "lodash/mapValues";
 
@@ -25,17 +24,12 @@ export enum SlpInputSource {
   FILE = "file",
 }
 
-type SlpFileReadInput = {
-  source: SlpInputSource.FILE;
-  filePath: string;
-};
-
 type SlpBufferReadInput = {
   source: SlpInputSource.BUFFER;
   buffer: Buffer;
 };
 
-export type SlpReadInput = SlpFileReadInput | SlpBufferReadInput;
+export type SlpReadInput = SlpBufferReadInput;
 
 export type SlpRefType = SlpFileSourceRef | SlpBufferSourceRef;
 
@@ -62,15 +56,6 @@ export type SlpBufferSourceRef = {
 
 function getRef(input: SlpReadInput): SlpRefType {
   switch (input.source) {
-    case SlpInputSource.FILE:
-      if (!input.filePath) {
-        throw new Error("File source requires a file path");
-      }
-      const fd = fs.openSync(input.filePath, "r");
-      return {
-        source: input.source,
-        fileDescriptor: fd,
-      };
     case SlpInputSource.BUFFER:
       return {
         source: input.source,
@@ -83,13 +68,14 @@ function getRef(input: SlpReadInput): SlpRefType {
 
 function readRef(ref: SlpRefType, buffer: Uint8Array, offset: number, length: number, position: number): number {
   switch (ref.source) {
-    case SlpInputSource.FILE:
-      return fs.readSync(ref.fileDescriptor, buffer, offset, length, position);
     case SlpInputSource.BUFFER:
-      if (position >= ref.buffer.length) {
-        return 0;
+      try {
+        return ref.buffer.copy(buffer, offset, position, position + length);
+      } catch {
+        // If there is an error with ref.buffer.copy, fallback to TypedArray.prototype.set()
+        buffer.set(ref.buffer.subarray(position, position + length), offset);
+        return length;
       }
-      return ref.buffer.copy(buffer, offset, position, position + length);
     default:
       throw new Error("Source type not supported");
   }
@@ -97,9 +83,6 @@ function readRef(ref: SlpRefType, buffer: Uint8Array, offset: number, length: nu
 
 function getLenRef(ref: SlpRefType): number {
   switch (ref.source) {
-    case SlpInputSource.FILE:
-      const fileStats = fs.fstatSync(ref.fileDescriptor);
-      return fileStats.size;
     case SlpInputSource.BUFFER:
       return ref.buffer.length;
     default:
@@ -129,13 +112,7 @@ export function openSlpFile(input: SlpReadInput): SlpFileType {
   };
 }
 
-export function closeSlpFile(file: SlpFileType): void {
-  switch (file.ref.source) {
-    case SlpInputSource.FILE:
-      fs.closeSync(file.ref.fileDescriptor);
-      break;
-  }
-}
+export function closeSlpFile(_file: SlpFileType): void {}
 
 // This function gets the position where the raw data starts
 function getRawDataPosition(ref: SlpRefType): number {

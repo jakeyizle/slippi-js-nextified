@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { EventEmitter } from "events";
 
 import type { Connection, ConnectionDetails, ConnectionSettings } from "./types";
@@ -56,100 +57,6 @@ export class DolphinConnection extends EventEmitter implements Connection {
     console.log(`Connecting to: ${ip}:${port}`);
     this.ipAddress = ip;
     this.port = port;
-
-    const enet = await import("enet");
-    // Create the enet client
-    const client = enet.createClient({ peers: MAX_PEERS, channels: 3, down: 0, up: 0 }, (err) => {
-      if (err) {
-        console.error(err);
-        return;
-      }
-    });
-
-    this.peer = client.connect(
-      {
-        address: this.ipAddress,
-        port: this.port,
-      },
-      3,
-      1337, // Data to send, not sure what this is or what this represents
-      (err: any, newPeer: any) => {
-        if (err) {
-          console.error(err);
-          return;
-        }
-
-        newPeer.ping();
-        this.emit(ConnectionEvent.CONNECT);
-        this._setStatus(ConnectionStatus.CONNECTED);
-      },
-    );
-
-    this.peer.on("connect", () => {
-      // Reset the game cursor to the beginning of the game. Do we need to do this or
-      // should it just continue from where it left off?
-      this.gameCursor = 0;
-
-      const request = {
-        type: "connect_request",
-        cursor: this.gameCursor,
-      };
-      const packet = new enet.Packet(JSON.stringify(request), enet.PACKET_FLAG.RELIABLE);
-      this.peer.send(0, packet);
-    });
-
-    this.peer.on("message", (packet: any) => {
-      const data = packet.data();
-      if (data.length === 0) {
-        return;
-      }
-
-      const dataString = data.toString("ascii");
-      const message = JSON.parse(dataString);
-      const { dolphin_closed } = message;
-      if (dolphin_closed) {
-        // We got a disconnection request
-        this.disconnect();
-        return;
-      }
-      this.emit(ConnectionEvent.MESSAGE, message);
-      switch (message.type) {
-        case DolphinMessageType.CONNECT_REPLY:
-          this.connectionStatus = ConnectionStatus.CONNECTED;
-          this.gameCursor = message.cursor;
-          this.nickname = message.nick;
-          this.version = message.version;
-          this.emit(ConnectionEvent.HANDSHAKE, this.getDetails());
-          break;
-        case DolphinMessageType.GAME_EVENT: {
-          const { payload } = message;
-          //TODO: remove after game start and end messages have been in stable Ishii for a bit
-          if (!payload) {
-            // We got a disconnection request
-            this.disconnect();
-            return;
-          }
-
-          this._updateCursor(message, dataString);
-
-          const gameData = Buffer.from(payload, "base64");
-          this._handleReplayData(gameData);
-          break;
-        }
-        case DolphinMessageType.START_GAME: {
-          this._updateCursor(message, dataString);
-          break;
-        }
-        case DolphinMessageType.END_GAME: {
-          this._updateCursor(message, dataString);
-          break;
-        }
-      }
-    });
-
-    this.peer.on("disconnect", () => {
-      this.disconnect();
-    });
 
     this._setStatus(ConnectionStatus.CONNECTING);
   }

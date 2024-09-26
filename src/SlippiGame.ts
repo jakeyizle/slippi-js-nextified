@@ -54,13 +54,8 @@ export class SlippiGame {
   private targetBreakComputer: TargetBreakComputer = new TargetBreakComputer();
   protected statsComputer: Stats;
 
-  public constructor(input: string | Buffer | ArrayBuffer, opts?: StatOptions) {
-    if (typeof input === "string") {
-      this.input = {
-        source: SlpInputSource.FILE,
-        filePath: input,
-      };
-    } else if (input instanceof Buffer) {
+  public constructor(input: Buffer | ArrayBuffer, opts?: StatOptions) {
+    if (input instanceof Buffer) {
       this.input = {
         source: SlpInputSource.BUFFER,
         buffer: input,
@@ -260,14 +255,6 @@ export class SlippiGame {
     this.metadata = getMetadata(slpfile);
     closeSlpFile(slpfile);
     return this.metadata;
-  }
-
-  public getFilePath(): string | null {
-    if (this.input.source !== SlpInputSource.FILE) {
-      return null;
-    }
-
-    return this.input.filePath ?? null;
   }
 
   public getWinners(): PlacementType[] {

@@ -1,5 +1,5 @@
-import type { WriteStream } from "fs";
-import fs from "fs";
+// @ts-nocheck
+import fs from "browserfs/dist/shims/fs";
 import forEach from "lodash/forEach";
 import type { WritableOptions } from "stream";
 import { Writable } from "stream";
@@ -38,7 +38,7 @@ export type SlpFileMetadata = {
 export class SlpFile extends Writable {
   private filePath: string;
   private metadata: SlpFileMetadata;
-  private fileStream: WriteStream | null = null;
+  private fileStream: any | null = null;
   private rawDataLength = 0;
   private slpStream: SlpStream;
   private usesExternalStream = false;
